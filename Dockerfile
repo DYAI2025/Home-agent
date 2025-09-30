@@ -12,6 +12,8 @@ RUN apt-get update \
         build-essential \
         curl \
         ffmpeg \
+        libportaudio2 \
+        portaudio19-dev \
         nodejs \
         npm \
     && rm -rf /var/lib/apt/lists/*
