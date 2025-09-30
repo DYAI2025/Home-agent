@@ -17,6 +17,9 @@ The system consists of:
 #### Prerequisites:
 - Fly.io account
 - Fly CLI installed (`flyctl`)
+- Python dependencies from `requirements.txt`
+  - Only the minimal runtime stack is installed by default.
+  - Optional features that pull in large packages live in `requirements-optional.txt` and should be installed explicitly when you need them.
 
 #### Steps:
 1. Initialize the app:
@@ -36,6 +39,12 @@ The system consists of:
 3. Deploy:
    ```bash
    fly deploy
+   ```
+
+   If you require optional capabilities (e.g. MongoDB persistence or the Hugging Face translation pipeline), pass the build argument `INSTALL_OPTIONAL=true` so the Docker image installs `requirements-optional.txt` as well:
+
+   ```bash
+   fly deploy --build-arg INSTALL_OPTIONAL=true
    ```
 
 ### Option 2: Deploy to Render
