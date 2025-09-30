@@ -1,0 +1,26 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.swp
+*.swo
+
+# Environment files
+.env
+.env.*
+
+# Node artifacts
+node_modules/
+.npm/
+
+# Byte-compiled / optimized / DLL files
+*.so
+
+# Logs
+*.log
+
+# IDE / editor settings
+.vscode/
+.idea/
+.DS_Store

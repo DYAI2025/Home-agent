@@ -6,6 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+ARG INSTALL_OPTIONAL=false
+
 # Install system dependencies for Python audio processing and the Node frontend
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -20,8 +22,12 @@ RUN apt-get update \
 
 # Install Python dependencies
 COPY requirements.txt ./requirements.txt
+COPY requirements-optional.txt ./requirements-optional.txt
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && if [ "$INSTALL_OPTIONAL" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-optional.txt; \
+    fi
 
 # Install Node dependencies
 COPY package.json package-lock.json ./

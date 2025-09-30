@@ -1,0 +1,15 @@
+# Optional extras that significantly increase image size.
+# Install selectively, e.g. `pip install -r requirements-optional.txt`,
+# when you enable the corresponding features.
+
+# Alternate speech pipeline support via Deepgram
+livekit-plugins-deepgram
+
+# Persistent storage with MongoDB
+motor
+pymongo
+
+# Translation pipeline powered by Hugging Face
+transformers
+# Choose your preferred backend for transformers. PyTorch is the default.
+torch
