@@ -6,15 +6,17 @@ This script starts the complete voice AI agent system with all features.
 """
 
 import asyncio
-import os
 import sys
 import logging
+from pathlib import Path
 from dotenv import load_dotenv
 
 from livekit.agents import WorkerOptions, cli
 
-# Add the voice_ai_agent directory to the path to allow imports
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# Ensure the repository root is on the Python path for package imports
+ROOT_DIR = Path(__file__).resolve().parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.append(str(ROOT_DIR))
 
 from voice_ai_agent.integrated_agent import LiveKitVoiceAgent
 
@@ -54,5 +56,5 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Voice AI Agent stopped by user")
     except Exception as e:
-        logger.error(f"Error running Voice AI Agent: {e}")
+        logger.error("Error running Voice AI Agent: %s", e)
         raise
