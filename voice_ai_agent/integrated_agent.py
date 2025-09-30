@@ -1,24 +1,11 @@
-"""
-Integrated Voice AI Agent
-
-This module brings together all components of the voice AI agent system.
-"""
+"""Integrated Voice AI agent orchestrating all subsystems."""
 
 import asyncio
 import logging
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-import os
 
-from livekit import rtc
-from livekit.agents import (
-    Agent,
-    AgentSession,
-    JobContext,
-    WorkerOptions,
-    cli,
-)
-from livekit.agents import vad
+from livekit.agents import AgentSession, JobContext
 from livekit.plugins import openai, silero
 
 from .agents.voice_agent import VoiceAIAgent
@@ -67,10 +54,20 @@ class IntegratedVoiceAgent:
     def _initialize_system(self):
         """Initialize the complete system"""
         self.logger.info("Initializing integrated voice AI agent...")
-        
-        # Initialize database connection
-        asyncio.create_task(self.db_handler.connect())
-        
+
+        # Try to initialize the database connection when an event loop is available.
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            loop.create_task(self.db_handler.connect())
+        else:
+            # A loop isn't running yet (e.g. during synchronous construction).
+            # The handler will lazily connect when first used.
+            self.logger.debug("Database connection will be initialized lazily")
+
         self.logger.info("Integrated voice AI agent initialized successfully")
 
     async def process_user_input(self, user_input: str, user_id: str = "default_user") -> Dict[str, Any]:
@@ -179,6 +176,8 @@ class IntegratedVoiceAgent:
 
     async def get_user_profile(self, user_id: str) -> Dict[str, Any]:
         """Get comprehensive user profile including all system data"""
+        await self.db_handler.ensure_connection()
+
         # Get data from all components
         user_data = await self.db_handler.get_user_data(user_id)
         satisfaction_score = self.feedback_processor.get_user_satisfaction_score(user_id)
@@ -253,8 +252,9 @@ class IntegratedVoiceAgent:
         """Update user preferences across all systems"""
         # Update in recommendation engine
         await self.recommendation_engine.update_user_preferences(user_id, preferences)
-        
+
         # Update in database
+        await self.db_handler.ensure_connection()
         await self.db_handler.store_user_preferences(user_id, preferences)
         
         # Update language preference in translation processor

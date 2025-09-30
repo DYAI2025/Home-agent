@@ -41,31 +41,6 @@ processes = []
     restart_limit = 0
     timeout = "2s"
 
-# LiveKit WebSocket service
-[[services]]
-  internal_port = 7880
-  protocol = "tcp"
-  processes = ["app"]
-
-  [[services.ports]]
-    port = "4433"
-    handlers = ["tls", "http"]
-    tls_options = { alpn = ["http/1.1"] }
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-
-# LiveKit TCP service
-[[services]]
-  internal_port = 7881
-  protocol = "tcp"
-  processes = ["app"]
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-
 [[vm]]
   cpu_kind = "shared"
   cpus = 1

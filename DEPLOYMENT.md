@@ -5,7 +5,7 @@ This package allows you to deploy the Voice AI Agent with all features to cloud 
 ## Architecture Overview
 
 The system consists of:
-1. LiveKit Server for real-time communication
+1. An externally managed LiveKit Server for real-time communication
 2. Node.js frontend for avatar cockpit interface
 3. Python agent with all AI features
 4. MongoDB for data persistence (external service)
@@ -57,7 +57,7 @@ The system consists of:
 
 ## Important Notes
 
-1. **LiveKit Server**: For production, you'll need a separate LiveKit server instance (can be self-hosted or use LiveKit Cloud)
+1. **LiveKit Server**: Deploy a separate LiveKit server instance (self-hosted or LiveKit Cloud) and point the container to it via environment variables. The Docker image no longer embeds a LiveKit binary.
 
 2. **Database**: MongoDB connection needs to be configured separately
 
