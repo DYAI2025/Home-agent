@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  livekit-server:
+    image: livekit/livekit-server:latest
+    container_name: livekit-server-dev
+    ports:
+      - "7880:7880"    # HTTP API and dashboard
+      - "7881:7881"    # TCP port for RTC
+      - "50000-60000:50000-60000/udp"  # UDP ports for RTC
+    environment:
+      - LIVEKIT_PORT=7880
+      - LIVEKIT_RTC_UDPPORT=50000-60000
+      - LIVEKIT_RTC_TCPPORT=7881
+      - LIVEKIT_KEYS={"devkey": "secret"}
+      - LIVEKIT_LOG_LEVEL=debug
+      - LIVEKIT_ENABLE_TURN=true
+      - LIVEKIT_TURN_PORT_RANGE_START=30000
+      - LIVEKIT_TURN_PORT_RANGE_END=40000
+      - LIVEKIT_TURN_LISTEN_ADDRESSES=0.0.0.0
+    volumes:
+      - ./config.yaml:/config.yaml
+    command: [
+      "--config", "/config.yaml"
+    ]
+    restart: unless-stopped

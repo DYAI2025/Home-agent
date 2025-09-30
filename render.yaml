@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: voice-ai-agent
+    env: docker
+    region: frankfurt  # or your preferred region
+    plan: starter
+    branch: main
+    healthCheckPath: /
+    healthCheckPort: 3000
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: LIVEKIT_URL
+        sync: false  # This will be set in the dashboard
+      - key: LIVEKIT_API_KEY
+        sync: false  # This will be set in the dashboard
+      - key: LIVEKIT_API_SECRET
+        sync: false  # This will be set in the dashboard
+      - key: OPENAI_API_KEY
+        sync: false  # This will be set in the dashboard
+      - key: MONGODB_URI
+        sync: false  # This will be set in the dashboard
