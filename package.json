@@ -1,0 +1,26 @@
+{
+  "name": "livekit-agent-avatar-frontend",
+  "version": "1.0.0",
+  "description": "Frontend for LiveKit Agent with Avatar Integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "livekit-server-sdk": "^1.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "livekit",
+    "agent",
+    "avatar",
+    "webRTC",
+    "ai"
+  ],
+  "author": "Voice AI Agent",
+  "license": "MIT"
+}

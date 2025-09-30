@@ -1,0 +1,31 @@
+# Core requirements
+livekit-agents
+livekit-plugins-openai
+livekit-plugins-silero
+livekit-plugins-deepgram
+
+# Database
+pymongo
+motor
+
+# NLP and ML
+openai
+anthropic
+transformers
+torch
+sentence-transformers
+
+# Avatar and UI
+websockets
+requests
+
+# Utilities
+python-dotenv
+pydantic
+
+# Additional requirements for full functionality
+aiohttp
+numpy
+scipy
+sounddevice
+pyaudio
