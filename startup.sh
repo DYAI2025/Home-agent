@@ -40,7 +40,7 @@ trap cleanup SIGINT SIGTERM
 
 set +e
 if ((${#CHILD_PIDS[@]} > 0)); then
-  wait -n "${CHILD_PIDS[@]}"
+  wait -n ${CHILD_PIDS[@]}
   EXIT_CODE=$?
 else
   EXIT_CODE=0
