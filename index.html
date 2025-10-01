@@ -172,7 +172,8 @@
           downloadAvatarLink.href = '#';
           return;
         }
-        viewer.src = `${url}?pose=idle`;
+        viewer.src = url;
+        viewer.setAttribute('crossorigin', 'anonymous');
         avatarStatus.textContent = `Avatar URL: ${url}`;
         downloadAvatarLink.href = url;
       }
