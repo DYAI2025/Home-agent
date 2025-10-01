@@ -29,7 +29,7 @@ class AvatarManager:
         self.logger = logging.getLogger(self.__class__.__name__)
         self._default_profile = AvatarProfile(
             ready_player_me_url=(
-                "https://models.readyplayer.me/64d8c1c5474edc001d7c41e0.glb"
+                "https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing"
             ),
             pose="standing",
             background="#1e1e2f",

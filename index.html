@@ -60,9 +60,9 @@
           <div class="row">
             <select id="avatarPreset">
               <option value="">Choose preset</option>
-              <option value="https://models.readyplayer.me/66794a1243b679eca39449c7.glb">Default Avatar</option>
-              <option value="https://models.readyplayer.me/642d6550b45c44b66baba610.glb">Cyber Agent</option>
-              <option value="https://models.readyplayer.me/645e3bc2612e6ed62d022d2d.glb">Support Guide</option>
+              <option value="https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing">Benchmark Agent</option>
+              <option value="https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=wave">Expressive Guide</option>
+              <option value="https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=dynamic">Dynamic Specialist</option>
             </select>
             <button class="primary" id="loadPreset">Load Avatar</button>
           </div>
@@ -165,14 +165,36 @@
         chatLog.scrollTop = chatLog.scrollHeight;
       }
 
+      let currentAvatarUrl = null;
+      let fallbackAvatarUrl = 'https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing';
+
+      const READY_PLAYER_ME_PREFIXES = [
+        'https://models.readyplayer.me/',
+        'https://readyplayerme-avatars.s3.amazonaws.com/',
+        'https://d1a370nemizbjq.cloudfront.net/',
+        'https://cdn.readyplayer.me/',
+        `https://${rpmSubdomain}.readyplayer.me/`,
+      ];
+
+      function beginAvatarLoad(url) {
+        if (!url) {
+          return;
+        }
+        avatarStatus.textContent = `Loading avatar from ${url} ...`;
+        viewer.removeAttribute('src');
+      }
+
       function setAvatar(url) {
         if (!url) {
           viewer.removeAttribute('src');
           avatarStatus.textContent = 'Avatar URL: none';
           downloadAvatarLink.href = '#';
+          currentAvatarUrl = null;
           return;
         }
-        viewer.src = url;
+        currentAvatarUrl = url;
+        beginAvatarLoad(url);
+        viewer.setAttribute('src', url);
         viewer.setAttribute('crossorigin', 'anonymous');
         avatarStatus.textContent = `Avatar URL: ${url}`;
         downloadAvatarLink.href = url;
@@ -184,8 +206,33 @@
       }
 
       function isValidReadyPlayerMeUrl(url) {
-        return url?.startsWith('https://models.readyplayer.me/') && url.endsWith('.glb');
+        if (!url) return false;
+        const normalized = url.trim();
+        if (!normalized) return false;
+        if (!normalized.includes('.glb')) return false;
+        return READY_PLAYER_ME_PREFIXES.some((prefix) => normalized.startsWith(prefix));
       }
+
+      viewer.addEventListener('load', () => {
+        if (!currentAvatarUrl) {
+          return;
+        }
+        avatarStatus.textContent = `Avatar loaded from ${currentAvatarUrl}`;
+        fallbackAvatarUrl = currentAvatarUrl;
+      });
+
+      viewer.addEventListener('error', () => {
+        if (!currentAvatarUrl) {
+          return;
+        }
+        const failedUrl = currentAvatarUrl;
+        const message = `Avatar failed to load from ${failedUrl}. Falling back to the last working model.`;
+        avatarStatus.textContent = message;
+        addMessage('system', message);
+        if (fallbackAvatarUrl && fallbackAvatarUrl !== failedUrl) {
+          setAvatar(fallbackAvatarUrl);
+        }
+      });
 
       loadPresetBtn.addEventListener('click', () => {
         const url = avatarPreset.value;
@@ -227,6 +274,10 @@
               avatarUrlInput.value = url;
               showCreator(false);
               addMessage('system', 'Avatar updated from Creator.');
+            } else {
+              const warning = 'Creator returned an unsupported URL. Paste it manually if you trust the source.';
+              avatarStatus.textContent = warning;
+              addMessage('system', warning);
             }
           }
         } catch (error) {
@@ -348,7 +399,7 @@
       window.addEventListener('beforeunload', () => { if (activeRoom) activeRoom.disconnect(); });
 
       addMessage('system', 'Welcome! Load your avatar and connect to the room.');
-      setAvatar('https://models.readyplayer.me/66794a1243b679eca39449c7.glb');
+      setAvatar('https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing');
     </script>
   </body>
 </html>
