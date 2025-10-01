@@ -7,6 +7,19 @@ log() {
 
 log "Starting Voice AI agent stack"
 
+missing_var=false
+for required in LIVEKIT_URL LIVEKIT_API_KEY LIVEKIT_API_SECRET OPENAI_API_KEY; do
+  if [ -z "${!required:-}" ]; then
+    log "Missing required environment variable: $required"
+    missing_var=true
+  fi
+done
+
+if [ "$missing_var" = true ]; then
+  log "Set the variables above (use 'fly secrets set' in production)."
+  exit 1
+fi
+
 python main.py &
 PYTHON_PID=$!
 log "Python agent started with PID ${PYTHON_PID}"

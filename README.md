@@ -1,104 +1,49 @@
-# Voice AI Agent with Avatar Cockpit
-Complete implementation with all requested features and a web-based interface
+# Home Agent Fly.io Deployment
 
-## Features Implemented:
+This branch packages the LiveKit voice agent, Ready Player Me cockpit, and supporting services so the full stack can be deployed on Fly.io.
 
-1. **Avatar Integration**: Ready Player Me avatar integration through AvatarManager
-2. **MongoDB Database**: Complete database handling via MongoDBHandler
-3. **Semantic Memory**: Knowledge storage and retrieval via SemanticMemory
-4. **Episodic Memory**: Personal experience tracking via EpisodicMemory
-5. **Real-Time Screen Observation**: Screen monitoring via ScreenObserver
-6. **Natural Language Processing**: Understanding via NLUProcessor
-7. **Task Management**: Task handling via TaskManager
-8. **Scheduling**: Calendar and appointment management via Scheduler
-9. **Personalized Recommendations**: Tailored suggestions via RecommendationEngine
-10. **Voice Command Functionality**: Voice command recognition via VoiceCommandProcessor
-11. **Real-Time Translation**: Multilingual support via TranslationEngine
-12. **Feedback Mechanism**: User feedback processing via FeedbackProcessor
+## Components
+- **Python agent (`main.py`)** - runs the LiveKit worker using `livekit-agents` with OpenAI STT/LLM/TTS.
+- **Node/Express frontend (`server.js`, `index.html`)** - serves the cockpit UI and mints LiveKit access tokens.
+- **Startup orchestration (`startup.sh`)** - launches the Python agent and frontend inside the Fly machine.
+- **Dockerfile** - multi-runtime image (Python + Node) with audio dependencies (`ffmpeg`, `portaudio`).
+- **fly.toml** - app configuration for Fly (`home-agent`).
 
-## Project Structure:
-- agents/: Main agent classes and avatar management
-- memory/: Semantic and episodic memory systems
-- database/: MongoDB integration
-- utils/: Various utility classes (NLP, commands, translation, etc.)
-- config/: Configuration (to be added as needed)
+## Prerequisites
+1. Create a LiveKit project (self-hosted or Cloud) and note `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` (secret must be at least 32 characters).
+2. Collect credentials required by the agent: at minimum `OPENAI_API_KEY`. Optional: `ANTHROPIC_API_KEY`, `MONGO_URI`, etc.
+3. Install Fly CLI (`flyctl`) and log in: `fly auth login`.
 
-## Setup and Installation:
-
-### 1. Python Agent Setup:
+## Local smoke test
 ```bash
-# Install Python dependencies
-cd /path/to/Livekit_Agents/agents
-uv sync
-
-# Install additional dependencies for the voice agent
-cd /path/to/Livekit_Agents/voice_ai_agent
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. JavaScript Frontend Setup:
-```bash
-# Install Node.js dependencies (already done if you followed the above)
-cd /path/to/Livekit_Agents/voice_ai_agent
 npm install
+export LIVEKIT_URL=wss://your-livekit-host
+export LIVEKIT_API_KEY=devkey
+export LIVEKIT_API_SECRET=lk_dev_secret_0123456789abcdef012345
+export OPENAI_API_KEY=sk-...
+./startup.sh
 ```
+Open http://localhost:3000, load an avatar, and connect to a room that your LiveKit server hosts.
 
-### 3. Environment Configuration:
+## Deploy to Fly.io
 ```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit the .env file to add your API keys and configuration
-nano .env
+fly launch --name home-agent --no-deploy
+fly ips allocate-v4             # optional dedicated IPv4
+fly secrets set \
+  LIVEKIT_URL=wss://... \
+  LIVEKIT_API_KEY=... \
+  LIVEKIT_API_SECRET=... \
+  OPENAI_API_KEY=... \
+  READY_PLAYER_ME_SUBDOMAIN=demo
+fly deploy
 ```
 
-### 4. Start the Local LiveKit Server:
-```bash
-# Navigate to the server directory
-cd /path/to/Livekit_Agents/server
+### Troubleshooting
+- `missing required environment variable` during boot: set secrets with `fly secrets set ...`.
+- `failed to wait for VM ... not found`: rerun `fly deploy`; ensure app name matches `fly.toml` (`home-agent`).
+- No audio or LLM response: confirm LiveKit credentials, the OpenAI key, and that the agent process is healthy (`fly logs`).
 
-# Start the LiveKit server using Docker
-./start_server_docker.sh
-```
-
-## Running the Complete System:
-
-### 1. Start the JavaScript Frontend (Avatar Cockpit):
-```bash
-cd /path/to/Livekit_Agents/voice_ai_agent
-
-# Start the Node.js server
-npm start
-# Or use: node server.js
-```
-
-This will start the web interface at http://localhost:3000
-
-### 2. Start the Python Agent:
-```bash
-cd /path/to/Livekit_Agents/agents
-
-# Run the voice AI agent
-uv run python ../voice_ai_agent/main.py dev
-```
-
-### 3. Using the Avatar Cockpit:
-1. Open your browser and navigate to http://localhost:3000
-2. Enter a room name and your identity
-3. Select and load your Ready Player Me avatar
-4. Connect to the LiveKit room
-5. Interact with the AI agent via voice or text
-
-## Key Components Integration:
-The IntegratedVoiceAgent class brings together all features into a cohesive system,
-with the LiveKitVoiceAgent providing the actual voice interface through LiveKit.
-The JavaScript frontend provides a user-friendly interface to interact with the agent,
-including avatar visualization and chat capabilities.
-
-## Notes:
-- Ensure MongoDB is running if you want to use the memory and user data features
-- The agent connects to the same LiveKit server as specified in your .env file
-- The avatar cockpit uses your local client SDK at ../client_SDK.js
-
-This implementation provides a solid foundation that can be extended with more
-sophisticated models and services as needed.
+## Branch structure
+This branch (`fly-branch`) tracks Fly-specific configuration. Merge back to `main` once validated or keep it as a deployment branch.

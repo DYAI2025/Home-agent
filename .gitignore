@@ -1,0 +1,7 @@
+node_modules/
+__pycache__/
+*.log
+.env
+.env.*
+Home-agent/
+voice_ai_agent/__pycache__/
