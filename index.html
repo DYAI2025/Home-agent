@@ -1,590 +1,564 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AI Agent Cockpit • Rea<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiveKit Agent Avatar Cockpit</title>
-    <script src="../client_SDK.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .avatar-container {
-            width: 100%;
-            height: 500px;
-            background-color: #000;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-        .video-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-        }
-        video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        .readyplayerme-frame {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        .controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        input, button, select {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #007bff;
-            color: white;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: #0056b3;
-        }
-        .status {
-            margin-top: 10px;
-            padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-        }
-        .chat-container {
-            margin-top: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            height: 200px;
-            overflow-y: auto;
-            padding: 10px;
-        }
-        .message {
-            margin: 5px 0;
-            padding: 5px;
-            border-radius: 4px;
-        }
-        .user-message {
-            background-color: #d4edda;
-        }
-        .agent-message {
-            background-color: #cce5ff;
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-        .input-container input {
-            flex: 1;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>LiveKit Agent Avatar Cockpit</h1>
-        
-        <div class="controls">
-            <input type="text" id="roomInput" placeholder="Room Name" value="avatar-room">
-            <input type="text" id="identityInput" placeholder="Your Name" value="user">
-            <button onclick="connectToRoom()">Connect to Room</button>
-            <button onclick="disconnectFromRoom()">Disconnect</button>
-            <select id="avatarModel">
-                <option value="">Select Avatar Model</option>
-                <option value="https://models.readyplayer.me/66794a1243b679eca39449c7.glb">Default Avatar</option>
-                <!-- Add more avatar options here -->
-            </select>
-            <button onclick="loadAvatar()">Load Avatar</button>
-        </div>
-        
-        <div class="avatar-container" id="avatarContainer">
-            <div class="video-container" id="videoContainer">
-                <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
-                <video id="remoteVideo" autoplay playsinline style="width: 100%; height: 100%;"></video>
-            </div>
-        </div>
-        
-        <div class="status" id="status">
-            Status: Not connected
-        </div>
-        
-        <div class="chat-container" id="chatContainer">
-            <div class="message agent-message">Welcome! Connect to the room to start chatting with the AI agent.</div>
-        </div>
-        
-        <div class="input-container">
-            <input type="text" id="messageInput" placeholder="Type your message here...">
-            <button onclick="sendMessage()">Send</button>
-        </div>
-    </div>
-
-    <script>
-        // LiveKit client
-        let room = null;
-        let participant = null;
-        
-        // DOM elements
-        const statusDiv = document.getElementById('status');
-        const chatContainer = document.getElementById('chatContainer');
-        const messageInput = document.getElementById('messageInput');
-        
-        // Connect to LiveKit room
-        async function connectToRoom() {
-            const roomName = document.getElementById('roomInput').value || 'avatar-room';
-            const identity = document.getElementById('identityInput').value || 'user';
-            
-            statusDiv.innerHTML = `Connecting to room: ${roomName}...`;
-            
-            try {
-                // Get access token
-                const response = await fetch(`/token?room=${roomName}&identity=${identity}`);
-                const { token, url } = await response.json();
-                
-                // Create room instance
-                room = new LiveKit.Room();
-                
-                // Connect to room
-                await room.connect(url, token);
-                
-                // Local participant
-                participant = room.localParticipant;
-                
-                // Attach local participant's video
-                const localVideo = document.getElementById('localVideo');
-                const localTrack = participant.videoTrackPublications.get('camera');
-                if (localTrack) {
-                    localTrack.track.attach(localVideo);
-                }
-                
-                // Handle remote participant tracks
-                room.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, remoteParticipant) => {
-                    const remoteVideo = document.getElementById('remoteVideo');
-                    track.attach(remoteVideo);
-                });
-                
-                statusDiv.innerHTML = `Connected to room: ${roomName}`;
-                
-                // Add chat message
-                addMessage('system', 'Connected to the room. You can now chat with the AI agent.');
-            } catch (error) {
-                statusDiv.innerHTML = `Error: ${error.message}`;
-                console.error('Connection error:', error);
-            }
-        }
-        
-        // Disconnect from room
-        function disconnectFromRoom() {
-            if (room) {
-                room.disconnect();
-                room = null;
-                statusDiv.innerHTML = 'Disconnected from room';
-                addMessage('system', 'Disconnected from the room.');
-            }
-        }
-        
-        // Load avatar from Ready Player Me
-        function loadAvatar() {
-            const avatarModelUrl = document.getElementById('avatarModel').value;
-            if (!avatarModelUrl) {
-                alert('Please select an avatar model');
-                return;
-            }
-            
-            // In a real implementation, you would integrate the avatar model with your 3D engine
-            // This is a placeholder to show how it would work
-            const avatarContainer = document.getElementById('avatarContainer');
-            avatarContainer.innerHTML = `
-                <div style="text-align: center;">
-                    <div style="font-size: 48px; margin-bottom: 10px;">🤖</div>
-                    <p>Avatar model loaded: ${avatarModelUrl}</p>
-                    <p>In a full implementation, this would display your 3D avatar</p>
-                </div>
-            `;
-            
-            addMessage('system', 'Avatar loaded. In a full implementation, your Ready Player Me avatar would be displayed here.');
-        }
-        
-        // Send a chat message
-        function sendMessage() {
-            const message = messageInput.value.trim();
-            if (!message) return;
-            
-            if (room) {
-                // Send data message to other participants
-                room.localParticipant.publishData(new TextEncoder().encode(message), 
-                    LiveKit.DataPacket_Kind.RELIABLE);
-            }
-            
-            addMessage('user', message);
-            messageInput.value = '';
-        }
-        
-        // Add message to chat container
-        function addMessage(sender, text) {
-            const messageDiv = document.createElement('div');
-            messageDiv.classList.add('message');
-            messageDiv.classList.add(`${sender}-message`);
-            
-            const now = new Date();
-            const timeString = now.toLocaleTimeString();
-            
-            messageDiv.textContent = `[${timeString}] ${sender.charAt(0).toUpperCase() + sender.slice(1)}: ${text}`;
-            chatContainer.appendChild(messageDiv);
-            
-            // Scroll to bottom
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-        }
-        
-        // Handle incoming data messages
-        function setupDataMessageHandler() {
-            if (!room) return;
-            
-            room.on(LiveKit.RoomEvent.DataReceived, (payload, participant) => {
-                const text = new TextDecoder().decode(payload);
-                addMessage('agent', text);
-            });
-        }
-        
-        // Set up enter key for sending messages
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendMessage();
-            }
-        });
-    </script>
-</body>
-</html>
-dy Player Me</title>
+  <title>LiveKit Voice Agent Cockpit</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/livekit-client/dist/livekit-client.min.js"></script>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
   <style>
-    :root{
-      --bg0: #0a0b10;
-      --bg1: #10121a;
-      --glass: rgba(255,255,255,0.06);
-      --glass-2: rgba(255,255,255,0.10);
-      --txt: #e7ecff;
-      --muted: #a9b2d0;
-      --accent: #7af1ff;
-      --accent-2: #b07cff;
-      --danger: #ff6b8a;
-      --ok: #79ffa7;
-      --shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.06);
-      --radius: 16px;
+    :root {
+      color-scheme: dark light;
+      --bg: #0c111d;
+      --panel: rgba(20, 26, 40, 0.85);
+      --accent: #4cc9f0;
+      --accent-strong: #4361ee;
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f8fbff;
+      --muted: rgba(255, 255, 255, 0.68);
     }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body{
-      margin:0; color:var(--txt); background: radial-gradient(1200px 900px at 10% -10%, #162034 0%, #0b0c12 50%, #06070b 100%), var(--bg0);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
-      line-height:1.45;
+
+    * {
+      box-sizing: border-box;
     }
-    header{
-      display:flex; align-items:center; justify-content:space-between; gap:16px;
-      padding:20px 24px;
-      backdrop-filter: saturate(140%) blur(8px);
-      background: linear-gradient( to right, rgba(122,241,255,0.06), rgba(176,124,255,0.04) );
-      border-bottom: 1px solid rgba(255,255,255,0.06);
+
+    body {
+      margin: 0;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: radial-gradient(circle at top left, rgba(76, 201, 240, 0.18), transparent 45%),
+                  radial-gradient(circle at top right, rgba(67, 97, 238, 0.16), transparent 50%),
+                  var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
-    .brand{ font-weight:700; letter-spacing:0.4px; }
-    .chip{ padding:6px 10px; border-radius:999px; background:var(--glass); border:1px solid rgba(255,255,255,0.08); color:var(--muted); }
-    main{
-      display:grid; grid-template-columns: minmax(460px, 1.1fr) minmax(420px, 0.9fr);
-      gap:18px; padding:18px; height: calc(100% - 72px);
+
+    header {
+      padding: 24px;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
     }
-    .panel{
-      background: linear-gradient(180deg, var(--glass-2), var(--glass));
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: var(--radius); box-shadow: var(--shadow);
-      padding:16px; display:flex; flex-direction:column; min-height:0;
+
+    header h1 {
+      margin: 0;
+      font-size: 1.75rem;
+      font-weight: 700;
     }
-    .panel h3{ margin:0 0 12px 0; font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:0.12em; color:var(--muted); }
-    .headerline{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
-    .row{ display:flex; gap:10px; flex-wrap:wrap; }
-    .btn{
-      appearance:none; border:none; outline:none; cursor:pointer; text-decoration:none;
-      padding:10px 14px; border-radius:12px; background: rgba(255,255,255,0.08);
-      color:var(--txt); font-weight:600; letter-spacing:0.2px; box-shadow: var(--shadow);
-      transition: transform .06s ease, background .2s ease, border-color .2s ease;
-      border:1px solid rgba(255,255,255,0.08); display:inline-flex; align-items:center; gap:8px;
-      user-select:none;
+
+    header .badge {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(76, 201, 240, 0.16);
+      border: 1px solid rgba(76, 201, 240, 0.35);
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 600;
     }
-    .btn:hover{ transform: translateY(-1px); }
-    .btn.primary{ background: linear-gradient( to right, rgba(122,241,255,0.18), rgba(176,124,255,0.18)); border-color: rgba(122,241,255,0.35); }
-    .btn.success{ border-color: rgba(121,255,167,0.35); background: rgba(121,255,167,0.12); }
-    .btn.warn{ border-color: rgba(255,107,138,0.35); background: rgba(255,107,138,0.10); }
-    .grid-buttons{ display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:10px; }
-    .section{ margin-top:12px; padding-top:12px; border-top:1px dashed rgba(255,255,255,0.08); }
-    .kv{ font-size:13px; color:var(--muted); }
-    /* Avatar area */
-    .viewer-wrap{ position:relative; flex:1; min-height:280px; border-radius:14px; overflow:hidden; border:1px solid rgba(255,255,255,0.08); background:#0b0f18; }
-    model-viewer{ width:100%; height:100%; min-height:380px; display:block; }
-    .toolbar{
-      display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;
+
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(360px, 1fr) minmax(420px, 1.2fr);
+      gap: 18px;
+      padding: 0 24px 24px;
     }
-    .urlbox{
-      margin-top:8px; padding:10px; background:rgba(255,255,255,0.06);
-      border-radius:10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size:12px;
-      word-break: break-all; color:#def7ff; border:1px solid rgba(255,255,255,0.08);
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 20px;
+      backdrop-filter: blur(10px) saturate(140%);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
-    /* iframe */
-    .rpm-frame{ width:100%; height:600px; border:none; border-radius:12px; margin-top:12px; background:#000; }
-    /* Switches */
-    .switch{
-      display:inline-grid; grid-template-columns:auto 1fr; align-items:center; gap:10px; padding:8px 10px; border-radius:12px;
-      border:1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.06); margin:4px 0;
+
+    .panel h2 {
+      margin: 0;
+      font-size: 1rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
-    .switch input{ appearance:none; width:40px; height:24px; border-radius:999px; background:#202637; position:relative; outline:none; border:1px solid rgba(255,255,255,0.12); cursor:pointer; }
-    .switch input::after{ content:""; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#c6d2ff; transition: all .18s ease; }
-    .switch input:checked{ background:linear-gradient( to right, #2be4a2, #7af1ff ); border-color:transparent; }
-    .switch input:checked::after{ transform: translateX(16px); background:#0b0f18; }
-    .muted{ color:var(--muted); font-size:13px; }
-    footer{ padding:10px 18px 18px; color:var(--muted); }
-    @media (max-width: 1060px){
-      main{ grid-template-columns: 1fr; height:auto; }
-      model-viewer{ min-height:320px; }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .control-buttons {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+      justify-content: flex-start;
+      grid-column: 1 / -1;
+    }
+
+    .control-buttons button {
+      flex: 1;
+      min-width: 140px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    input, select, button, textarea {
+      font: inherit;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.04);
+      color: inherit;
+    }
+
+    input:focus, select:focus, textarea:focus, button:focus {
+      outline: 2px solid rgba(76, 201, 240, 0.35);
+      outline-offset: 1px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 120ms ease, background 160ms ease;
+    }
+
+    button.primary {
+      background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+      border: none;
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(67, 97, 238, 0.35);
+    }
+
+    button.secondary,
+    a.secondary {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+      box-shadow: none;
+    }
+
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+    }
+
+    .video-stage {
+      position: relative;
+      background: rgba(0, 0, 0, 0.45);
+      border-radius: 16px;
+      overflow: hidden;
+      aspect-ratio: 16 / 9;
+      display: grid;
+      place-items: center;
+    }
+
+    video, audio {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    audio {
+      display: none;
+    }
+
+    .video-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 0.95rem;
+      text-align: center;
+    }
+
+    .status-banner {
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(67, 97, 238, 0.08);
+      border: 1px solid rgba(67, 97, 238, 0.24);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .chat-log {
+      flex: 1;
+      min-height: 180px;
+      max-height: 280px;
+      overflow-y: auto;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.35);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .message {
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-size: 0.9rem;
+      line-height: 1.35;
+      word-break: break-word;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .message.system {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: rgba(76, 201, 240, 0.22);
+    }
+
+    .message.agent {
+      align-self: flex-start;
+      background: rgba(67, 97, 238, 0.22);
+    }
+
+    .chat-input {
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    .chat-input input {
+      flex: 1;
+    }
+
+    .avatar-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 16px;
+    }
+
+    model-viewer {
+      width: 100%;
+      height: 360px;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    iframe {
+      width: 100%;
+      height: 460px;
+      border: none;
+      border-radius: 16px;
+      background: #000;
+    }
+
+    .avatar-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .avatar-url {
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      word-break: break-all;
+    }
+
+    footer {
+      padding: 18px 24px 28px;
+      color: var(--muted);
+      font-size: 0.85rem;
+      text-align: center;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
-  <!-- 3D Viewer (für GLB) -->
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
 </head>
 <body>
   <header>
-    <div class="brand">AI Agent Cockpit</div>
-    <div class="chip">Ready Player Me + Shortcuts</div>
+    <h1>LiveKit Voice Agent Cockpit</h1>
+    <span class="badge">Ready Player Me • LiveKit • AI Agent</span>
   </header>
 
   <main>
-    <!-- LINKSPANE: Avatar -->
-    <section class="panel" id="avatar-panel">
-      <div class="headerline">
-        <h3>Avatar</h3>
-        <div class="row">
-          <button class="btn primary" id="btnOpenCreator">Avatar erstellen/ändern</button>
-          <button class="btn" id="btnHideCreator" title="Creator ausblenden">Creator ausblenden</button>
+    <section class="panel" id="session-panel">
+      <h2>Realtime session</h2>
+
+      <form class="controls" id="connectForm">
+        <label>
+          Room name
+          <input type="text" id="roomInput" name="room" value="avatar-room" autocomplete="off" />
+        </label>
+        <label>
+          Your identity
+          <input type="text" id="identityInput" name="identity" value="pilot" autocomplete="off" />
+        </label>
+        <div class="control-buttons">
+          <button type="submit" class="primary" id="connectBtn">Connect</button>
+          <button type="button" class="secondary" id="disconnectBtn" disabled>Disconnect</button>
+        </div>
+      </form>
+
+      <div class="status-banner" id="status">Status: idle</div>
+
+      <div class="video-stage" id="videoStage">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <audio id="remoteAudio" autoplay></audio>
+        <div class="video-placeholder" id="videoPlaceholder">
+          <span>Waiting for remote media…</span>
         </div>
       </div>
 
-      <div class="viewer-wrap">
-        <model-viewer id="viewer" src="" alt="Ready Player Me Avatar" camera-controls auto-rotate shadow-intensity="1"></model-viewer>
+      <div class="chat-log" id="chatLog">
+        <div class="message system">Connect to a room to exchange data messages with the agent.</div>
       </div>
-      <div class="toolbar">
-        <a class="btn success" id="btnDownloadGlb" href="#" download>GLB speichern</a>
-        <button class="btn" id="btnCopyUrl">URL kopieren</button>
-      </div>
-      <div class="urlbox" id="avatarUrl">Avatar URL: –</div>
 
-      <iframe id="rpmFrame" class="rpm-frame" allow="camera *; microphone *; clipboard-write" hidden></iframe>
-      <div class="muted section">
-        Hinweis: Wenn du eine eigene RPM-Subdomain hast, trage sie unten in <code>CONFIG.subdomain</code> ein (statt <code>demo</code>).
+      <div class="chat-input">
+        <input type="text" id="messageInput" placeholder="Send a message to the agent" autocomplete="off" />
+        <button type="button" class="secondary" id="sendMessageBtn" disabled>Send</button>
       </div>
     </section>
 
-    <!-- RECHTSPANE: Cockpit -->
-    <section class="panel" id="cockpit">
-      <div class="headerline">
-        <h3>Cockpit</h3>
-        <div class="chip" id="bridgeStatus">Bridge: <strong>aus</strong></div>
-      </div>
-
-      <div class="section">
-        <h3>Schnellstart</h3>
-        <div class="grid-buttons">
-          <!-- Deeplinks (Zero-Setup) -->
-          <a class="btn" data-proto="vscode" data-path="/ABSOLUTER/PFAD/ZU/PROJEKT">🧑‍💻 VS Code – Projekt</a>
-          <a class="btn" data-proto="cursor" data-path="/ABSOLUTER/PFAD/ZU/PROJEKT">🤖 Cursor – Projekt</a>
-          <a class="btn" href="file:///ABSOLUTER/PFAD/ZU/VERZEICHNIS">📁 Ordner öffnen (file://)</a>
-          <a class="btn" href="https://console.cloud.google.com/">☁️ Google Cloud Console</a>
-
-          <!-- Via Bridge (wenn aktiv) -->
-          <a class="btn" data-bridge='{"cmd":"code","args":["/ABSOLUTER/PFAD/ZU/PROJEKT"]}'>▶️ Öffne VS Code (Bridge)</a>
-          <a class="btn" data-bridge='{"cmd":"cursor","args":["/ABSOLUTER/PFAD/ZU/PROJEKT"]}'>▶️ Öffne Cursor (Bridge)</a>
+    <section class="panel" id="avatar-panel">
+      <h2>Avatar studio</h2>
+      <div class="avatar-grid">
+        <model-viewer id="avatarViewer" shadow-intensity="1" camera-controls auto-rotate ar></model-viewer>
+        <div class="avatar-actions">
+          <button type="button" class="secondary" id="toggleCreatorBtn">Open avatar creator</button>
+          <a class="secondary" id="downloadAvatarBtn" href="#" download="ready-player-me-avatar.glb">Download GLB</a>
+          <button type="button" class="secondary" id="copyAvatarUrlBtn">Copy URL</button>
         </div>
-      </div>
-
-      <div class="section">
-        <h3>Services</h3>
-        <label class="switch">
-          <input type="checkbox" data-bridge='{"service":"livekit","on":{"cmd":"livekit-start"},"off":{"cmd":"livekit-stop"}}'>
-          <span></span> <strong>LiveKit</strong> <span class="muted">lokal starten/stoppen</span>
-        </label>
-        <label class="switch">
-          <input type="checkbox" data-bridge='{"service":"stt","on":{"cmd":"stt-start"},"off":{"cmd":"stt-stop"}}'>
-          <span></span> <strong>Speech-to-Text</strong>
-        </label>
-        <label class="switch">
-          <input type="checkbox" data-bridge='{"service":"tts","on":{"cmd":"tts-start"},"off":{"cmd":"tts-stop"}}'>
-          <span></span> <strong>Text-to-Speech</strong>
-        </label>
-      </div>
-
-      <div class="section">
-        <h3>Notizen</h3>
-        <div class="kv">
-          • Deeplinks funktionieren nur, wenn die App eine URL-Scheme registriert hat (z. B. <code>vscode://</code>).<br/>
-          • <code>file://</code>-Links werden von manchen Browsern blockiert, wenn die Seite per <code>http://</code> ausgeliefert wird. Lokal per <code>file://</code> öffnen klappt eher.<br/>
-          • Für verlässliche Steuerung nutze die Bridge (siehe unten).
-        </div>
+        <div class="avatar-url" id="avatarUrl">Avatar URL: not loaded yet</div>
+        <iframe id="rpmFrame" allow="camera *; microphone *; clipboard-write" hidden></iframe>
       </div>
     </section>
   </main>
 
   <footer>
-    <div class="kv">Konfiguration anpassen in <code>CONFIG</code>. Für die Bridge siehe <em>server.js</em> unten.</div>
+    Configure <code>LIVEKIT_URL</code>, <code>LIVEKIT_API_KEY</code> and <code>LIVEKIT_API_SECRET</code> to connect to your deployment. Use the Ready Player Me creator to refresh the avatar visible above.
   </footer>
 
   <script>
-    // ===================== CONFIG =====================
-    const CONFIG = {
-      subdomain: 'demo', // <— HIER deine ReadyPlayerMe-Subdomain eintragen, falls vorhanden
-      deeplinks: {
-        // Pfade OS-abhängig absolut angeben (z.B. C:/User/… auf Windows, /Users/… auf macOS/Linux)
-        vscode: (path) => `vscode://file/${encodeURI(path)}`,
-        // Cursor Editor (falls registriertes Scheme vorhanden; sonst über Bridge starten)
-        cursor: (path) => `cursor://file/${encodeURI(path)}`
-      },
-      bridge: {
-        enabled: true,              // auf false, wenn du die Node-Bridge nicht nutzen willst
-        url: 'http://localhost:7071'
+    const statusDiv = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const disconnectBtn = document.getElementById('disconnectBtn');
+    const sendMessageBtn = document.getElementById('sendMessageBtn');
+    const messageInput = document.getElementById('messageInput');
+    const chatLog = document.getElementById('chatLog');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const remoteAudio = document.getElementById('remoteAudio');
+    const videoPlaceholder = document.getElementById('videoPlaceholder');
+
+    let room = null;
+
+    function setStatus(text) {
+      statusDiv.textContent = text;
+    }
+
+    function appendMessage(type, text) {
+      const message = document.createElement('div');
+      message.classList.add('message', type);
+      message.innerHTML = `<strong>${type === 'user' ? 'You' : type === 'agent' ? 'Agent' : 'System'}:</strong> ${text}`;
+      chatLog.appendChild(message);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function setControlsConnected(isConnected) {
+      connectBtn.disabled = isConnected;
+      disconnectBtn.disabled = !isConnected;
+      sendMessageBtn.disabled = !isConnected;
+      messageInput.disabled = !isConnected;
+      if (!isConnected) {
+        videoPlaceholder.style.display = 'flex';
+        remoteVideo.srcObject = null;
       }
-    };
-    // ==================================================
+    }
 
-    // Ready Player Me – iFrame initialisieren
-    const frame = document.getElementById('rpmFrame');
-    frame.src = `https://${CONFIG.subdomain}.readyplayer.me/avatar?frameApi`;
+    async function connectToRoom(roomName, identity) {
+      setStatus(`Connecting to ${roomName}…`);
+      appendMessage('system', `Connecting to ${roomName} as ${identity}`);
 
-    function safeJSON(x){ try{ return typeof x === 'string' ? JSON.parse(x) : x }catch(_){ return null } }
+      try {
+        const response = await fetch(`/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ error: response.statusText }));
+          throw new Error(error.error || 'Unable to fetch token');
+        }
 
-    function subscribe(event){
-      const json = safeJSON(event.data);
-      if (!json || json.source !== 'readyplayerme') return;
+        const { token, url } = await response.json();
+        room = await LiveKit.connect(url, token, { autoSubscribe: true });
 
-      if (json.eventName === 'v1.frame.ready') {
-        frame.contentWindow.postMessage(JSON.stringify({
-          target: 'readyplayerme', type:'subscribe', eventName: 'v1.**'
+        registerRoomHandlers();
+        setControlsConnected(true);
+        setStatus(`Connected to ${roomName}`);
+        videoPlaceholder.style.display = 'none';
+        appendMessage('system', 'Connected. Media tracks will appear automatically when the agent publishes them.');
+      } catch (error) {
+        console.error('Connection error:', error);
+        appendMessage('system', `Connection failed: ${error.message}`);
+        setStatus(`Error: ${error.message}`);
+        setControlsConnected(false);
+        room = null;
+      }
+    }
+
+    function registerRoomHandlers() {
+      if (!room) return;
+
+      room.on(LiveKit.RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        if (track.kind === LiveKit.Track.Kind.Video) {
+          track.attach(remoteVideo);
+        }
+        if (track.kind === LiveKit.Track.Kind.Audio) {
+          track.attach(remoteAudio);
+        }
+      });
+
+      room.on(LiveKit.RoomEvent.TrackUnsubscribed, (track) => {
+        track.detach();
+      });
+
+      room.on(LiveKit.RoomEvent.DataReceived, (payload, participant) => {
+        const text = new TextDecoder().decode(payload);
+        appendMessage('agent', text);
+      });
+
+      room.on(LiveKit.RoomEvent.Disconnected, () => {
+        appendMessage('system', 'Disconnected from room');
+        setStatus('Disconnected');
+        setControlsConnected(false);
+        room = null;
+      });
+    }
+
+    async function disconnectFromRoom() {
+      if (room) {
+        await room.disconnect();
+        room = null;
+        appendMessage('system', 'You left the room');
+      }
+      setStatus('Disconnected');
+      setControlsConnected(false);
+    }
+
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || !room) return;
+
+      appendMessage('user', text);
+      messageInput.value = '';
+      try {
+        const payload = new TextEncoder().encode(text);
+        await room.localParticipant.publishData(payload, LiveKit.DataPacket_Kind.RELIABLE);
+      } catch (error) {
+        console.error('Failed to send data message:', error);
+        appendMessage('system', `Sending failed: ${error.message}`);
+      }
+    }
+
+    document.getElementById('connectForm').addEventListener('submit', (event) => {
+      event.preventDefault();
+      const roomName = event.target.room.value.trim() || 'avatar-room';
+      const identity = event.target.identity.value.trim() || `pilot-${Date.now()}`;
+      connectToRoom(roomName, identity);
+    });
+
+    disconnectBtn.addEventListener('click', () => {
+      disconnectFromRoom();
+    });
+
+    sendMessageBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        sendMessage();
+      }
+    });
+
+    setControlsConnected(false);
+
+    // Ready Player Me integration
+    const rpmFrame = document.getElementById('rpmFrame');
+    const avatarViewer = document.getElementById('avatarViewer');
+    const avatarUrlLabel = document.getElementById('avatarUrl');
+    const toggleCreatorBtn = document.getElementById('toggleCreatorBtn');
+    const copyAvatarUrlBtn = document.getElementById('copyAvatarUrlBtn');
+    const downloadAvatarBtn = document.getElementById('downloadAvatarBtn');
+
+    const readyPlayerMeDomain = 'demo.readyplayer.me';
+    rpmFrame.src = `https://${readyPlayerMeDomain}/avatar?frameApi`;
+
+    function handleReadyPlayerMeMessage(event) {
+      if (!event.data) return;
+      const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (data.source !== 'readyplayerme') return;
+
+      if (data.eventName === 'v1.frame.ready') {
+        rpmFrame.contentWindow.postMessage(JSON.stringify({
+          target: 'readyplayerme',
+          type: 'subscribe',
+          eventName: 'v1.**'
         }), '*');
       }
 
-      if (json.eventName === 'v1.avatar.exported') {
-        const url = json.data.url;
-        setViewer(url);
-        document.getElementById('avatarUrl').textContent = `Avatar URL: ${url}`;
-        const dl = document.getElementById('btnDownloadGlb'); dl.href = url;
-        frame.hidden = true;
-      }
-
-      if (json.eventName === 'v1.user.set') {
-        console.log(`RPM user id: ${json.data.id}`);
-      }
-    }
-    window.addEventListener('message', subscribe);
-    document.addEventListener('message', subscribe);
-
-    // 3D Anzeige
-    function setViewer(glbUrl){
-      const mv = document.getElementById('viewer');
-      mv.src = glbUrl;
-    }
-
-    // UI-Buttons
-    document.getElementById('btnOpenCreator').addEventListener('click', () => frame.hidden = false);
-    document.getElementById('btnHideCreator').addEventListener('click', () => frame.hidden = true);
-    document.getElementById('btnCopyUrl').addEventListener('click', async () => {
-      const txt = document.getElementById('avatarUrl').textContent.replace('Avatar URL: ','').trim();
-      if (txt && txt !== '–') try{ await navigator.clipboard.writeText(txt) }catch(e){ console.warn('Clipboard', e) }
-    });
-
-    // Deeplink-Buttons
-    function tryOpenURL(url){
-      const a = document.createElement('a'); a.href = url; document.body.appendChild(a); a.click();
-      setTimeout(() => a.remove(), 100);
-    }
-    document.querySelectorAll('[data-proto]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const proto = el.dataset.proto;
-        const path = el.dataset.path || '';
-        const make = CONFIG.deeplinks[proto];
-        if (typeof make === 'function') tryOpenURL(make(path));
-      });
-    });
-
-    // Bridge-Helfer
-    const bridgeChip = document.getElementById('bridgeStatus');
-    async function pingBridge(){
-      if (!CONFIG.bridge.enabled) { bridgeChip.innerHTML = 'Bridge: <strong>aus</strong>'; return false; }
-      try{
-        const r = await fetch(CONFIG.bridge.url + '/ping', { method:'GET' });
-        if (r.ok){ bridgeChip.innerHTML = 'Bridge: <strong>an</strong>'; return true; }
-      }catch(_){}
-      bridgeChip.innerHTML = 'Bridge: <strong>aus</strong>';
-      return false;
-    }
-    pingBridge(); // Status initial
-
-    async function callBridge(endpoint, payload){
-      if (!CONFIG.bridge.enabled) return;
-      try{
-        const r = await fetch(CONFIG.bridge.url + endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload || {})
-        });
-        await r.json().catch(()=> ({}));
-      }catch(e){
-        console.warn('Bridge nicht erreichbar?', e);
-      }finally{
-        pingBridge();
+      if (data.eventName === 'v1.avatar.exported') {
+        const url = data.data?.url;
+        if (!url) return;
+        avatarViewer.src = url;
+        avatarUrlLabel.textContent = `Avatar URL: ${url}`;
+        downloadAvatarBtn.href = url;
+        rpmFrame.hidden = true;
       }
     }
 
-    // Bridge-Buttons (sofortige Aktionen)
-    document.querySelectorAll('[data-bridge]').forEach(el => {
-      el.addEventListener('click', e => {
-        e.preventDefault();
-        const data = safeJSON(el.dataset.bridge);
-        if (!data) return;
-        callBridge('/run', data);
-      });
+    window.addEventListener('message', handleReadyPlayerMeMessage);
+
+    toggleCreatorBtn.addEventListener('click', () => {
+      rpmFrame.hidden = !rpmFrame.hidden;
+      toggleCreatorBtn.textContent = rpmFrame.hidden ? 'Open avatar creator' : 'Hide avatar creator';
     });
 
-    // Bridge-Switches (on/off Services)
-    document.querySelectorAll('input[type="checkbox"][data-bridge]').forEach(input => {
-      input.addEventListener('change', () => {
-        const payload = safeJSON(input.dataset.bridge);
-        if (!payload) return;
-        const cfg = input.checked ? payload.on : payload.off;
-        callBridge('/run', cfg);
-      });
+    copyAvatarUrlBtn.addEventListener('click', async () => {
+      const text = avatarUrlLabel.textContent.replace('Avatar URL: ', '').trim();
+      if (!text || text === 'not loaded yet') return;
+      try {
+        await navigator.clipboard.writeText(text);
+        copyAvatarUrlBtn.textContent = 'Copied!';
+        setTimeout(() => {
+          copyAvatarUrlBtn.textContent = 'Copy URL';
+        }, 1500);
+      } catch (error) {
+        console.warn('Clipboard unavailable:', error);
+      }
     });
   </script>
 </body>
 </html>
-

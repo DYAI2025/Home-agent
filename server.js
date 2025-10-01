@@ -18,20 +18,27 @@ app.get('/token', (req, res) => {
   const participantIdentity = req.query.identity || `participant-${Date.now()}`;
 
   if (!API_KEY || !API_SECRET) {
-    return res.status(500).text('Missing LIVEKIT_API_KEY or LIVEKIT_API_SECRET');
+    return res.status(500).json({
+      error: 'Missing LIVEKIT_API_KEY or LIVEKIT_API_SECRET',
+    });
   }
 
-  const at = new AccessToken(API_KEY, API_SECRET, {
-    identity: participantIdentity,
-  });
+  try {
+    const at = new AccessToken(API_KEY, API_SECRET, {
+      identity: participantIdentity,
+    });
 
-  at.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true });
+    at.addGrant({ room, roomJoin: true, canPublish: true, canSubscribe: true });
 
-  res.json({
-    token: at.toJwt(),
-    url: process.env.LIVEKIT_URL || 'ws://localhost:7880',
-    room: room,
-  });
+    res.json({
+      token: at.toJwt(),
+      url: process.env.LIVEKIT_URL || 'ws://localhost:7880',
+      room,
+    });
+  } catch (error) {
+    console.error('Token generation failed:', error);
+    res.status(500).json({ error: 'Unable to create LiveKit token' });
+  }
 });
 
 const port = process.env.PORT || 3000;
