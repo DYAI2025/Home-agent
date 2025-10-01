@@ -26,15 +26,14 @@ class RecommendationEngine:
             prefs = self._preferences[user_id]
             history = self._history[user_id]
 
-        suggestions = []
-        if prefs.get("focus") == "productivity":
-            suggestions.append("Block 25 minutes for focused work.")
-        if "call" in context.lower():
-            suggestions.append("Prepare a quick agenda for your call.")
-        if not suggestions:
-            suggestions.append("Review your daily dashboard for new insights.")
+            suggestions = []
+            if prefs.get("focus") == "productivity":
+                suggestions.append("Block 25 minutes for focused work.")
+            if "call" in context.lower():
+                suggestions.append("Prepare a quick agenda for your call.")
+            if not suggestions:
+                suggestions.append("Review your daily dashboard for new insights.")
 
-        async with self._lock:
             history.extend(suggestions)
 
         return [Recommendation(content=s) for s in suggestions]
