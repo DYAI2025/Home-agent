@@ -9,13 +9,16 @@ log "Starting Voice AI agent stack"
 
 declare -a CHILD_PIDS=()
 
-if [[ -n "${LIVEKIT_API_KEY:-}" && -n "${LIVEKIT_API_SECRET:-}" ]]; then
+# Check that credentials are non-empty, not just whitespace, and alphanumeric
+if [[ -n "${LIVEKIT_API_KEY:-}" && -n "${LIVEKIT_API_SECRET:-}" && \
+      "${LIVEKIT_API_KEY//[[:space:]]/}" != "" && "${LIVEKIT_API_SECRET//[[:space:]]/}" != "" && \
+      "${LIVEKIT_API_KEY}" =~ ^[A-Za-z0-9]+$ && "${LIVEKIT_API_SECRET}" =~ ^[A-Za-z0-9]+$ ]]; then
   python main.py &
   PYTHON_PID=$!
   CHILD_PIDS+=("${PYTHON_PID}")
   log "Python agent started with PID ${PYTHON_PID}"
 else
-  log "LIVEKIT credentials missing; skipping Python agent startup"
+  log "LIVEKIT credentials missing or invalid; skipping Python agent startup"
 fi
 
 npm start &
