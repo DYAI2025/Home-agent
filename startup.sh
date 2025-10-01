@@ -7,25 +7,41 @@ log() {
 
 log "Starting Voice AI agent stack"
 
-python main.py &
-PYTHON_PID=$!
-log "Python agent started with PID ${PYTHON_PID}"
+declare -a CHILD_PIDS=()
+
+if [[ -n "${LIVEKIT_API_KEY:-}" && -n "${LIVEKIT_API_SECRET:-}" ]]; then
+  python main.py &
+  PYTHON_PID=$!
+  CHILD_PIDS+=("${PYTHON_PID}")
+  log "Python agent started with PID ${PYTHON_PID}"
+else
+  log "LIVEKIT credentials missing; skipping Python agent startup"
+fi
 
 npm start &
 NODE_PID=$!
+CHILD_PIDS+=("${NODE_PID}")
 log "Frontend started with PID ${NODE_PID}"
 
 cleanup() {
   log "Stopping services"
-  kill ${PYTHON_PID} ${NODE_PID} 2>/dev/null || true
-  wait ${PYTHON_PID} ${NODE_PID} 2>/dev/null || true
+  for pid in "${CHILD_PIDS[@]}"; do
+    kill "${pid}" 2>/dev/null || true
+  done
+  for pid in "${CHILD_PIDS[@]}"; do
+    wait "${pid}" 2>/dev/null || true
+  done
 }
 
 trap cleanup SIGINT SIGTERM
 
 set +e
-wait -n ${PYTHON_PID} ${NODE_PID}
-EXIT_CODE=$?
+if ((${#CHILD_PIDS[@]} > 0)); then
+  wait -n "${CHILD_PIDS[@]}"
+  EXIT_CODE=$?
+else
+  EXIT_CODE=0
+fi
 set -e
 
 cleanup
