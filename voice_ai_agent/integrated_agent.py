@@ -3,9 +3,11 @@
 import asyncio
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Awaitable
 
-from livekit.agents import AgentSession, JobContext
+from livekit import rtc
+from livekit.agents import Agent, AgentSession, JobContext
+from livekit.agents.voice import events as voice_events
 from livekit.plugins import openai, silero
 
 from .agents.voice_agent import VoiceAIAgent
@@ -280,45 +282,129 @@ class LiveKitVoiceAgent:
     async def entrypoint(self, ctx: JobContext):
         """Entrypoint for the LiveKit agent"""
         print(f"Voice agent connected to room: {ctx.room.name}")
-        
-        # Connect to the room
+
         await ctx.connect()
 
-        # Create an agent session with voice capabilities
         agent_session = AgentSession(
-            vad=silero.VAD.load(),  # Voice Activity Detection
-            stt=openai.STT(),       # Speech-to-Text
-            llm=openai.LLM(model="gpt-4o-mini"),  # Language Model
-            tts=openai.TTS(),       # Text-to-Speech
+            vad=silero.VAD.load(),
+            stt=openai.STT(),
+            llm=openai.LLM(model="gpt-4o-mini"),
+            tts=openai.TTS(),
         )
 
-        # Start the session
-        await agent_session.start(agent=self, room=ctx.room)
-        
-        # Initial greeting
-        await agent_session.generate_reply(
-            instructions="Greet the user and offer assistance"
+        voice_agent = Agent(
+            instructions=(
+                "You are a multimodal home assistant that speaks clearly, responds concisely, "
+                "and keeps conversations friendly."
+            )
         )
 
-        # Process incoming audio
-        async for event in agent_session.stream():
-            if event.type == "user_started_speaking":
-                self.logger.info("User started speaking")
-            elif event.type == "user_stopped_speaking":
-                self.logger.info("User stopped speaking")
-            elif event.type == "user_speech_committed":
-                # Process user speech
-                user_text = event.alternatives[0].text
-                self.logger.info(f"User said: {user_text}")
-                
-                # Process through our integrated system
-                response = await self.integrated_agent.process_user_input(user_text)
-                
-                # Generate AI response
-                if response["type"] == "conversation_response":
-                    await agent_session.generate_reply(
-                        instructions=response["response"]
-                    )
+        await agent_session.start(agent=voice_agent, room=ctx.room)
+
+        local_participant = ctx.room.local_participant
+        disconnect_event = asyncio.Event()
+
+        def _spawn_task(coro: Awaitable[Any]) -> asyncio.Task:
+            task = asyncio.create_task(coro)
+
+            def _log_task_result(fut: asyncio.Task) -> None:
+                try:
+                    fut.result()
+                except Exception as exc:  # pragma: no cover - defensive logging
+                    self.logger.exception("Background task failed: %s", exc)
+
+            task.add_done_callback(_log_task_result)
+            return task
+
+        async def publish_chat(text: str) -> None:
+            cleaned = text.strip()
+            if not cleaned:
+                return
+            try:
+                await local_participant.publish_data(cleaned, reliable=True, topic="chat")
+            except Exception as exc:
+                self.logger.warning("Failed to publish chat message: %s", exc)
+
+        async def speak_and_send(text: str) -> None:
+            cleaned = text.strip()
+            if not cleaned:
+                return
+            await publish_chat(cleaned)
+            try:
+                await agent_session.generate_reply(instructions=cleaned)
+            except Exception as exc:
+                self.logger.warning("Failed to synthesize reply: %s", exc)
+
+        async def process_user_text(user_text: str, user_id: str) -> None:
+            cleaned = user_text.strip()
+            if not cleaned:
+                return
+            try:
+                result = await self.integrated_agent.process_user_input(cleaned, user_id=user_id)
+            except Exception as exc:
+                self.logger.exception("Error processing user input: %s", exc)
+                await speak_and_send("I'm sorry, I ran into an internal error while processing that.")
+                return
+
+            reply: str | None = None
+            if result.get("type") == "conversation_response":
+                reply = result.get("response")
+                recommendations = result.get("recommendations") or []
+                if recommendations:
+                    suggestion_text = " Here are some suggestions: " + "; ".join(recommendations)
+                    reply = (reply or "").strip() + suggestion_text
+            elif result.get("type") == "command_response":
+                command_name = result.get("command", "command")
+                command_result = result.get("result")
+                reply = f"{command_name.replace('_', ' ').title()} result: {command_result}."
+
+            if reply:
+                await speak_and_send(reply)
+
+        @agent_session.on("user_input_transcribed")
+        def _on_user_input(event: voice_events.UserInputTranscribedEvent) -> None:
+            if not event.is_final:
+                return
+            _spawn_task(process_user_text(event.transcript, event.speaker_id or "default_user"))
+
+        @ctx.room.on("data_received")
+        def _on_data(packet: rtc.DataPacket) -> None:
+            if packet.participant is None:
+                return
+            if packet.topic and packet.topic not in ("", "chat"):
+                return
+            try:
+                message = packet.data.decode("utf-8").strip()
+            except Exception as exc:
+                self.logger.warning("Failed to decode data packet: %s", exc)
+                return
+            if not message:
+                return
+            identity = packet.participant.identity or "default_user"
+            _spawn_task(process_user_text(message, identity))
+
+        @agent_session.on("error")
+        def _on_session_error(event: voice_events.ErrorEvent) -> None:
+            self.logger.error("Agent session error: %s", event.error)
+            disconnect_event.set()
+
+        @agent_session.on("close")
+        def _on_session_close(_event: voice_events.CloseEvent) -> None:
+            disconnect_event.set()
+
+        @ctx.room.on("disconnected")
+        def _on_room_disconnected(_reason: rtc.DisconnectReason) -> None:  # type: ignore[type-arg]
+            disconnect_event.set()
+
+        await publish_chat("Agent connected. Say hello whenever you're ready.")
+        await speak_and_send("Hello! I'm your virtual assistant. How can I help you today?")
+
+        await disconnect_event.wait()
+
+        try:
+            await agent_session.aclose()
+        except Exception:  # pragma: no cover - best effort shutdown
+            self.logger.debug("Agent session already closed")
 
     async def get_agent_response(self, user_input: str, user_id: str = "default_user"):
         """Get response from the integrated agent"""
