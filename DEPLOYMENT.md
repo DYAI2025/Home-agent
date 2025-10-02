@@ -74,10 +74,17 @@ The system consists of:
 
 4. **Scaling**: Consider the resource requirements for audio processing
 
+## Google Realtime Voice Agent (Node.js)
+
+- Start the JavaScript worker with `npm run agent:google` (or bake it into a Fly.io machine) to stream Gemini-based speech via LiveKit. The script lives at `google_voice_agent.mjs` and reuses the shared frontend token endpoint.
+- Required environment variables: `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, and either `GOOGLE_API_KEY` or `GOOGLE_GENAI_API_KEY`. Optional knobs include `GOOGLE_REALTIME_MODEL` (defaults to `gemini-2.0-flash-exp`), `GOOGLE_GEMINI_VOICE` (defaults to `Puck`), `LIVEKIT_AGENT_CONCURRENCY`, and `AGENT_INSTRUCTIONS`.
+- For Fly.io, add those secrets via `fly secrets set GOOGLE_API_KEY=... GOOGLE_REALTIME_MODEL=gemini-2.0-flash-exp`. The worker can share the same image as the frontend or run as a sidecar machine depending on scaling needs.
+
 ## Environment Variables
 
 Required:
 - `LIVEKIT_URL` - WebSocket URL for LiveKit server
+  - Set this to your hosted LiveKit instance using `wss://...`; the backend now refuses to mint tokens when it is missing.
 - `LIVEKIT_API_KEY` - LiveKit API key
 - `LIVEKIT_API_SECRET` - LiveKit API secret
 - `OPENAI_API_KEY` - OpenAI API key for LLM functionality
@@ -85,6 +92,7 @@ Required:
 
 Optional:
 - `PORT` - Port to run the server on (default: 3000)
+- `GOOGLE_REALTIME_MODEL` - Required for `npm run agent:google`; choose a Gemini realtime model such as `gemini-2.0-flash-exp`.
 
 ## Features Included
 

@@ -112,35 +112,218 @@
     </main>
 
     <script type="module">
-      import { Room, RoomEvent, Track, createLocalTracks, setLogLevel } from 'https://cdn.jsdelivr.net/npm/livekit-client@2.15.7/dist/livekit-client.esm.mjs';
+      async function loadLiveKitClient() {
+        const localEsmUrl = '/libs/livekit-client.esm.mjs';
+        const remoteEsmUrl = 'https://cdn.jsdelivr.net/npm/livekit-client@2.15.7/dist/livekit-client.esm.mjs';
+        const localUmdUrl = '/libs/livekit-client.umd.min.js';
+        const remoteUmdUrl = 'https://cdn.jsdelivr.net/npm/livekit-client@2.15.7/dist/livekit-client.umd.min.js';
 
-      setLogLevel('info');
+        const tryImport = async (url) => {
+          try {
+            const module = await import(url);
+            if (module?.Room) {
+              return module;
+            }
+          } catch (err) {
+            console.warn(`Failed to import LiveKit client from ${url}`, err);
+          }
+          return null;
+        };
 
-      const viewer = document.getElementById('avatarViewer');
-      const avatarStatus = document.getElementById('avatarStatus');
-      const avatarPreset = document.getElementById('avatarPreset');
-      const avatarUrlInput = document.getElementById('avatarUrlInput');
-      const loadPresetBtn = document.getElementById('loadPreset');
-      const loadFromUrlBtn = document.getElementById('loadFromUrl');
-      const openCreatorBtn = document.getElementById('openCreator');
-      const closeCreatorBtn = document.getElementById('closeCreator');
-      const downloadAvatarLink = document.getElementById('downloadAvatar');
-      const rpmFrame = document.getElementById('rpmFrame');
+        const tryInjectScript = async (url) => {
+          if (window.LiveKit) {
+            return true;
+          }
 
-      const roomInput = document.getElementById('roomInput');
-      const identityInput = document.getElementById('identityInput');
-      const connectBtn = document.getElementById('connectBtn');
-      const disconnectBtn = document.getElementById('disconnectBtn');
-      const connectionTag = document.getElementById('connectionTag');
-      const statusLine = document.getElementById('statusLine');
-      const chatLog = document.getElementById('chatLog');
-      const messageInput = document.getElementById('messageInput');
-      const sendBtn = document.getElementById('sendBtn');
-      const remoteAudio = document.getElementById('remoteAudio');
-      const remoteVideo = document.getElementById('remoteVideo');
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.async = true;
+            script.onload = resolve;
+            script.onerror = () => reject(new Error(`Failed to load LiveKit bundle: ${url}`));
+            document.head.appendChild(script);
+          });
 
-      const textEncoder = new TextEncoder();
-      const textDecoder = new TextDecoder();
+          return Boolean(window.LiveKit);
+        };
+
+        const localEsm = await tryImport(localEsmUrl);
+        if (localEsm) {
+          return localEsm;
+        }
+
+        const remoteEsm = await tryImport(remoteEsmUrl);
+        if (remoteEsm) {
+          return remoteEsm;
+        }
+
+        const localUmdLoaded = await tryInjectScript(localUmdUrl).catch((err) => {
+          console.warn(err.message);
+          return false;
+        });
+        if (!localUmdLoaded) {
+          await tryInjectScript(remoteUmdUrl);
+        }
+
+        if (window.LiveKit) {
+          return window.LiveKit;
+        }
+
+        throw new Error('Unable to load livekit-client. Check network connectivity.');
+      }
+
+      (async () => {
+        const livekit = await loadLiveKitClient();
+        const {
+          LocalVideoTrack,
+          Room,
+          RoomEvent,
+          Track,
+          createLocalTracks,
+          setLogLevel,
+        } = livekit;
+
+        setLogLevel?.('info');
+
+        const viewer = document.getElementById('avatarViewer');
+        const avatarStatus = document.getElementById('avatarStatus');
+        const avatarPreset = document.getElementById('avatarPreset');
+        const avatarUrlInput = document.getElementById('avatarUrlInput');
+        const loadPresetBtn = document.getElementById('loadPreset');
+        const loadFromUrlBtn = document.getElementById('loadFromUrl');
+        const openCreatorBtn = document.getElementById('openCreator');
+        const closeCreatorBtn = document.getElementById('closeCreator');
+        const downloadAvatarLink = document.getElementById('downloadAvatar');
+        const rpmFrame = document.getElementById('rpmFrame');
+
+        const roomInput = document.getElementById('roomInput');
+        const identityInput = document.getElementById('identityInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const connectionTag = document.getElementById('connectionTag');
+        const statusLine = document.getElementById('statusLine');
+        const chatLog = document.getElementById('chatLog');
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const remoteAudio = document.getElementById('remoteAudio');
+        const remoteVideo = document.getElementById('remoteVideo');
+
+        const textEncoder = new TextEncoder();
+        const textDecoder = new TextDecoder();
+
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+        let avatarReadyPromise = Promise.resolve();
+        let avatarReadyResolve = null;
+        let avatarVideoPublication = null;
+        let publishedVideoTrack = null;
+        let avatarStreamTrack = null;
+        let attemptedAvatarStream = false;
+
+        function resetAvatarReadyPromise() {
+          avatarReadyPromise = new Promise((resolve) => {
+            avatarReadyResolve = resolve;
+          });
+        }
+
+        function markAvatarReady() {
+          if (avatarReadyResolve) {
+            avatarReadyResolve();
+            avatarReadyResolve = null;
+          }
+        }
+
+      async function waitForAvatarReady(timeoutMs = 4000) {
+        let resolved = false;
+        const marker = avatarReadyPromise.then(() => {
+          resolved = true;
+        });
+        await Promise.race([marker, wait(timeoutMs)]);
+        return resolved;
+      }
+
+      async function locateAvatarCanvas(maxAttempts = 20, delayMs = 120) {
+        await waitForAvatarReady();
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          const host = viewer.renderRoot || viewer.shadowRoot;
+          const canvas = host?.querySelector('canvas');
+          if (canvas) {
+            return canvas;
+          }
+          await wait(delayMs);
+        }
+        return null;
+      }
+
+      async function startAvatarVideoTrack(room) {
+        if (!room?.localParticipant || publishedVideoTrack) {
+          return publishedVideoTrack;
+        }
+
+        const canvas = await locateAvatarCanvas();
+        if (!canvas || typeof canvas.captureStream !== 'function') {
+          addMessage('system', 'Avatar video streaming is not supported in this browser.');
+          return null;
+        }
+
+        try {
+          attemptedAvatarStream = true;
+          const fps = Number.parseInt(runtime.AVATAR_STREAM_FPS ?? '24', 10);
+          const stream = canvas.captureStream(Number.isFinite(fps) && fps > 0 ? fps : 24);
+          const [mediaTrack] = stream.getVideoTracks();
+          if (!mediaTrack) {
+            throw new Error('Ready Player Me canvas did not expose a video track');
+          }
+
+          mediaTrack.onended = () => {
+            addMessage('system', 'Avatar capture stopped.');
+            stopAvatarVideoTrack(room);
+          };
+
+          avatarStreamTrack = mediaTrack;
+          const localTrack = LocalVideoTrack.createFromMediaStreamTrack(mediaTrack);
+          const publication = await room.localParticipant.publishTrack(localTrack, {
+            source: Track.Source.Camera,
+          });
+
+          avatarVideoPublication = publication;
+          publishedVideoTrack = localTrack;
+          addMessage('system', 'Avatar video streaming active.');
+          return localTrack;
+        } catch (error) {
+          console.error('Avatar capture failed', error);
+          addMessage('system', `Avatar video unavailable: ${error.message}`);
+          stopAvatarVideoTrack(room);
+          return null;
+        }
+      }
+
+      function stopAvatarVideoTrack(room) {
+        const participant = room?.localParticipant || activeRoom?.localParticipant;
+        if (avatarVideoPublication && participant) {
+          try {
+            participant.unpublishTrack(avatarVideoPublication, true);
+          } catch (error) {
+            console.warn('Failed to unpublish avatar track', error);
+          }
+        }
+        avatarVideoPublication = null;
+
+        if (publishedVideoTrack) {
+          try {
+            publishedVideoTrack.stop();
+          } catch (error) {
+            console.warn('Failed to stop avatar video track', error);
+          }
+        }
+        publishedVideoTrack = null;
+
+        if (avatarStreamTrack) {
+          avatarStreamTrack.stop();
+        }
+        avatarStreamTrack = null;
+        attemptedAvatarStream = false;
+      }
 
       const runtime = window.RUNTIME || {};
       const rpmSubdomain = (runtime.READY_PLAYER_ME_SUBDOMAIN || 'demo').trim();
@@ -180,6 +363,7 @@
         if (!url) {
           return;
         }
+        resetAvatarReadyPromise();
         avatarStatus.textContent = `Loading avatar from ${url} ...`;
         viewer.removeAttribute('src');
       }
@@ -214,6 +398,7 @@
       }
 
       viewer.addEventListener('load', () => {
+        markAvatarReady();
         if (!currentAvatarUrl) {
           return;
         }
@@ -222,6 +407,7 @@
       });
 
       viewer.addEventListener('error', () => {
+        markAvatarReady();
         if (!currentAvatarUrl) {
           return;
         }
@@ -289,12 +475,27 @@
         if (activeRoom) return;
         setStatus('Connecting...');
         connectBtn.disabled = true;
+        attemptedAvatarStream = false;
+        stopAvatarVideoTrack();
         try {
+          if (!runtime.LIVEKIT_URL) {
+            throw new Error('LIVEKIT_URL is not configured on the server.');
+          }
           const roomName = roomInput.value.trim() || 'avatar-room';
           const identity = identityInput.value.trim() || `user-${Date.now()}`;
           const response = await fetch(`/token?room=${encodeURIComponent(roomName)}&identity=${encodeURIComponent(identity)}`);
-          if (!response.ok) throw new Error(await response.text());
-          const { token, url } = await response.json();
+          const payload = await response.json().catch(() => null);
+          if (!response.ok) {
+            const message =
+              (payload && typeof payload === 'object' && 'error' in payload && payload.error) ||
+              (typeof payload === 'string' ? payload : response.statusText);
+            throw new Error(message || 'Token request failed');
+          }
+          const token = payload?.token;
+          const url = payload?.url;
+          if (!token || !url) {
+            throw new Error('Token endpoint did not return LiveKit credentials.');
+          }
 
           const room = new Room({ adaptiveStream: true, dynacast: true, stopLocalTrackOnUnpublish: true });
 
@@ -337,6 +538,8 @@
             publishedMicTrack = micTrack;
           }
 
+          await startAvatarVideoTrack(room);
+
           activeRoom = room;
           addMessage('system', `Connected as ${room.localParticipant.identity}.`);
           setStatus(`Connected to ${roomName}.`);
@@ -360,6 +563,7 @@
         remoteAudio.hidden = true;
         publishedMicTrack?.stop();
         publishedMicTrack = null;
+        stopAvatarVideoTrack(activeRoom);
         if (activeRoom) {
           activeRoom.disconnect();
           activeRoom = null;
@@ -396,10 +600,22 @@
         }
       });
 
-      window.addEventListener('beforeunload', () => { if (activeRoom) activeRoom.disconnect(); });
+      window.addEventListener('beforeunload', () => {
+        if (activeRoom) {
+          stopAvatarVideoTrack(activeRoom);
+          activeRoom.disconnect();
+        }
+      });
 
-      addMessage('system', 'Welcome! Load your avatar and connect to the room.');
-      setAvatar('https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing');
+        addMessage('system', 'Welcome! Load your avatar and connect to the room.');
+        setAvatar('https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing');
+      })().catch((error) => {
+        console.error('Failed to initialise LiveKit cockpit', error);
+        const statusLine = document.getElementById('statusLine');
+        if (statusLine) {
+          statusLine.textContent = `LiveKit SDK failed to load: ${error.message}`;
+        }
+      });
     </script>
   </body>
 </html>

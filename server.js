@@ -8,7 +8,20 @@ const app = express();
 const server = http.createServer(app);
 
 const READY_PLAYER_ME_SUBDOMAIN = process.env.READY_PLAYER_ME_SUBDOMAIN || 'demo';
-const LIVEKIT_URL = process.env.LIVEKIT_URL || 'ws://localhost:7880';
+
+const inferDefaultLiveKitUrl = () => {
+  if (process.env.LIVEKIT_URL) {
+    return process.env.LIVEKIT_URL;
+  }
+  const isLocal =
+    process.env.NODE_ENV === 'development' || (!process.env.NODE_ENV && !process.env.FLY_APP_NAME);
+  return isLocal ? 'ws://localhost:7880' : '';
+};
+
+const LIVEKIT_URL = inferDefaultLiveKitUrl();
+if (!process.env.LIVEKIT_URL && !LIVEKIT_URL) {
+  console.warn('[server] LIVEKIT_URL is not configured. Set it via environment variable.');
+}
 
 app.use(express.json());
 
@@ -32,6 +45,12 @@ app.get('/token', (req, res) => {
   const API_SECRET = process.env.LIVEKIT_API_SECRET;
   const room = req.query.room || 'default-room';
   const participantIdentity = req.query.identity || `participant-${Date.now()}`;
+
+  if (!LIVEKIT_URL) {
+    return res.status(500).json({
+      error: 'Missing LIVEKIT_URL environment variable on the server',
+    });
+  }
 
   if (!API_KEY || !API_SECRET) {
     return res.status(500).json({
