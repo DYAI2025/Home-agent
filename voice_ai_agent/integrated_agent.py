@@ -23,15 +23,19 @@ from .memory.episodic_memory import EpisodicMemory
 from .database.mongodb_handler import MongoDBHandler
 from .utils.task_manager import TaskManager
 from .utils.scheduler import Scheduler
+from .utils.voice_profile_manager import VoiceProfileManager
 
 
 class IntegratedVoiceAgent:
-    def __init__(self):
+    def __init__(self, profile_path: Optional[str] = None):
         self.logger = logging.getLogger(self.__class__.__name__)
-        
-        # Initialize all system components
+
+        # Initialize voice profile manager for personalization
+        self.profile_manager = VoiceProfileManager(profile_path)
+
+        # Initialize all system components with profile support
         self.voice_agent = VoiceAIAgent()
-        self.avatar_manager = AvatarManager()
+        self.avatar_manager = AvatarManager(voice_profile_manager=self.profile_manager)
         self.screen_observer = ScreenObserver()
         self.nlp_processor = NLUProcessor()
         self.voice_command_processor = VoiceCommandProcessor()
@@ -39,17 +43,17 @@ class IntegratedVoiceAgent:
         self.feedback_processor = FeedbackProcessor()
         self.feedback_integration = FeedbackIntegration(self.feedback_processor)
         self.recommendation_engine = RecommendationEngine()
-        
+
         # Initialize memory and storage systems
         self.semantic_memory = SemanticMemory()
         self.episodic_memory = EpisodicMemory()
         self.db_handler = MongoDBHandler()
         self.task_manager = TaskManager()
         self.scheduler = Scheduler()
-        
+
         # Session-specific data
         self.current_session_data = {}
-        
+
         # Initialize components
         self._initialize_system()
 
@@ -275,8 +279,8 @@ class IntegratedVoiceAgent:
 
 # Main agent implementation that integrates with LiveKit
 class LiveKitVoiceAgent:
-    def __init__(self):
-        self.integrated_agent = IntegratedVoiceAgent()
+    def __init__(self, profile_path: Optional[str] = None):
+        self.integrated_agent = IntegratedVoiceAgent(profile_path)
         self.logger = logging.getLogger(self.__class__.__name__)
 
     async def entrypoint(self, ctx: JobContext):
@@ -285,19 +289,49 @@ class LiveKitVoiceAgent:
 
         await ctx.connect()
 
+        # Get personalized voice and greeting settings
+        voice_config = self.integrated_agent.profile_manager.get_voice_config()
+        user_prefs = self.integrated_agent.profile_manager.get_user_preferences()
+
+        # Create TTS based on user's voice profile
+        from .utils.custom_tts import create_tts_from_profile
+
+        try:
+            custom_tts = create_tts_from_profile(voice_config)
+            self.logger.info(
+                f"Using {voice_config['provider']} TTS "
+                f"for user {user_prefs.get('display_name', 'User')}"
+            )
+        except Exception as exc:
+            self.logger.warning(f"Failed to create custom TTS: {exc}. Using default.")
+            custom_tts = openai.TTS()
+
         agent_session = AgentSession(
             vad=silero.VAD.load(),
             stt=openai.STT(),
             llm=openai.LLM(model="gpt-4o-mini"),
-            tts=openai.TTS(),
+            tts=custom_tts,
         )
 
-        voice_agent = Agent(
-            instructions=(
-                "You are a multimodal home assistant that speaks clearly, responds concisely, "
-                "and keeps conversations friendly."
-            )
+        # Customize agent instructions based on personality
+        personality = user_prefs.get("agent_personality", "friendly")
+        language = user_prefs.get("preferred_language", "de")
+
+        personality_styles = {
+            "friendly": "freundlich und hilfsbereit",
+            "professional": "professionell und effizient",
+            "casual": "locker und entspannt",
+        }
+        style = personality_styles.get(personality, "freundlich")
+
+        instructions = (
+            f"Du bist ein persönlicher Home-Assistent. "
+            f"Dein Stil ist {style}. "
+            f"Antworte präzise und klar auf {language}. "
+            f"Halte Antworten kurz und hilfsbereit."
         )
+
+        voice_agent = Agent(instructions=instructions)
 
         await agent_session.start(agent=voice_agent, room=ctx.room)
 

@@ -1,0 +1,31 @@
+{
+  "user_id": "mein_user_id",
+  "display_name": "Dein Name",
+  "preferred_language": "de",
+  "greeting_message": "Hallo! Ich bin dein persönlicher Assistent und bereit zu helfen.",
+  "agent_personality": "friendly",
+  "use_voice_cloning": true,
+
+  "voice": {
+    "voice_provider": "openai",
+    "voice_id": "nova",
+    "voice_model": "tts-1",
+    "coqui_voice_file": null,
+    "coqui_language": "de",
+    "elevenlabs_stability": 0.5,
+    "elevenlabs_similarity_boost": 0.75,
+    "elevenlabs_style": 0.0,
+    "elevenlabs_use_speaker_boost": true,
+    "speaking_rate": 1.0,
+    "pitch": 1.0,
+    "volume": 1.0
+  },
+
+  "avatar": {
+    "avatar_url": "https://readyplayerme-avatars.s3.amazonaws.com/benchmark.glb?pose=standing",
+    "pose": "standing",
+    "background": "#1e1e2f",
+    "auto_rotate": true,
+    "custom_animations": null
+  }
+}

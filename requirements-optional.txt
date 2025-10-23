@@ -5,6 +5,14 @@
 # Alternate speech pipeline support via Deepgram
 livekit-plugins-deepgram
 
+# ElevenLabs voice cloning support
+livekit-plugins-elevenlabs
+elevenlabs
+
+# Coqui TTS for local voice cloning
+# Note: TTS library is large (~2GB) and may require additional system dependencies
+# TTS
+
 # Persistent storage with MongoDB
 motor
 pymongo

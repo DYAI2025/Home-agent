@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a Voice AI Agent with Avatar Cockpit - a multi-modal AI assistant that combines voice interaction, visual avatar representation (Ready Player Me), and comprehensive AI features including memory systems, task management, and real-time translation. The system is built on LiveKit for real-time communication.
 
+**NEW: Personalization Support**
+- The system now supports full personalization with custom voice cloning (ElevenLabs & Coqui TTS)
+- Users can configure their own Ready Player Me avatar
+- Customizable agent personality, language, and greetings
+- See `PERSONALIZATION_GUIDE.md` for setup instructions
+
 ## Architecture
 
 The system consists of three main components that work together:
@@ -92,6 +98,28 @@ docker run -d \
 curl http://localhost:7880/
 ```
 
+## Personalization Setup
+
+The agent can be fully personalized with custom voice and avatar:
+
+### Quick Setup
+
+1. **Create user profile:**
+   ```bash
+   cp user_profile.example.json user_profile.json
+   ```
+
+2. **Configure your settings** in `user_profile.json`:
+   - Voice provider (OpenAI, ElevenLabs, or Coqui)
+   - Avatar URL from Ready Player Me
+   - Personality and language preferences
+
+3. **For voice cloning:**
+   - **ElevenLabs**: Set `ELEVENLABS_API_KEY` in `.env`
+   - **Coqui TTS**: Install with `pip install TTS`
+
+4. **Full guide:** See `PERSONALIZATION_GUIDE.md` for detailed instructions
+
 ## Environment Variables
 
 Required environment variables (set in `.env` or deployment platform):
@@ -112,6 +140,10 @@ MONGODB_URI=mongodb+srv://...
 GOOGLE_API_KEY=your_google_key           # Or GOOGLE_GENAI_API_KEY
 GOOGLE_REALTIME_MODEL=gemini-2.0-flash-exp
 GOOGLE_GEMINI_VOICE=Puck
+
+# Voice Cloning (optional)
+ELEVENLABS_API_KEY=your_elevenlabs_key   # For ElevenLabs voice cloning
+ELEVENLABS_VOICE_ID=your_voice_id        # Your cloned voice ID
 
 # Optional customization
 PORT=3000                                # Frontend server port
@@ -143,8 +175,10 @@ LIVEKIT_AGENT_CONCURRENCY=1             # For Google agent
   - `task_manager.py`: Task tracking and management
   - `scheduler.py`: Calendar and appointment handling
   - `screen_observer.py`: Screen monitoring capabilities
+  - `voice_profile_manager.py`: **NEW** - User profile and personalization management
+  - `custom_tts.py`: **NEW** - Multi-provider TTS wrapper (OpenAI, ElevenLabs, Coqui)
 
-- **`integrated_agent.py`**: Main orchestrator that coordinates all subsystems
+- **`integrated_agent.py`**: Main orchestrator that coordinates all subsystems (now with personalization support)
 
 ### Node.js Frontend
 
